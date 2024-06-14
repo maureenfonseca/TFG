@@ -8,6 +8,7 @@ import numpy as np
 import pandas as pd
 import re
 import matplotlib.pyplot as plt
+from collections import defaultdict
 from math import radians, cos, sin, asin, sqrt
 
 def extract_number(path):
@@ -322,12 +323,14 @@ def diff_accum(df1, df2, column):
     # Difference between the accumulated ones
     diff_accum = accum1 - accum2
     # Calculate the percentage difference
-    percentage_diff = ((accum1 - accum2) / accum2) * 100
+    percentage_diff = ((accum1 - accum2) / ((accum1 + accum2)/2)) * 100
 
     dic = {
         'number': column,
-        'diff_accum': diff_accum,
-        'percentage_diff': percentage_diff
+        'acum_total_imn': round(accum1, 1),
+        'acum_total_gpm': round(accum2, 1),
+        'diff_accum': round(diff_accum, 1),
+        'percentage_diff': round(percentage_diff, 0)
     }
 
     return dic
@@ -382,9 +385,12 @@ def plot_resol(df1, df2, resolution, column):
     fig.tight_layout()
     fig.autofmt_xdate()
     
+    plt.savefig(f'./PLOTS/pcp_{column}_{resolution}.png')
+
     # Display the plot in the notebook
     plt.show()
-    
+
+# Define your T_fourier function  
 def T_fourier(df, col_name, d):
     W = np.hamming(len(df))
 
@@ -393,6 +399,35 @@ def T_fourier(df, col_name, d):
     
     return {'XFT': XFT, 'FT': FT}
     
+# Function to find the top 10 highest signals from Fourier Transform 
+def find_top_signals(df, d):
+    top_signals = {}
+    
+    for station in df.columns:
+        result = T_fourier(df, station, d)
+        magnitudes = np.abs(result['FT'])
+        frequencies = result['XFT']
+        
+        # Consider only positive frequencies
+        positive_frequencies = frequencies[frequencies > 0]
+        positive_magnitudes = magnitudes[frequencies > 0]
+        
+        # Get the top 10 indices of the highest magnitudes
+        top_indices = np.argsort(positive_magnitudes)[-10:][::-1]
+        
+        # Store frequencies and magnitudes for the station
+        top_signals[station] = {
+            f'frequency_{i+1}': positive_frequencies[top_indices[i]] for i in range(10)
+        }
+        top_signals[station].update({
+            f'magnitude_{i+1}': positive_magnitudes[top_indices[i]] for i in range(10)
+        })
+    
+    # Convert the dictionary to a DataFrame
+    top_signals_df = pd.DataFrame(top_signals).transpose()
+    
+    return top_signals_df
+
 def plot_freq(df1, df2, column):
     """
     This function is useful to make frequency plots.
@@ -410,35 +445,78 @@ def plot_freq(df1, df2, column):
     
     TF_1 = T_fourier(df1, column, 3600)
     TF_2 = T_fourier(df2, column, 3600)
-    
+
     fig, ax = plt.subplots(figsize=(10, 8))
 
-    ax.plot(TF_1['XFT'], np.abs(TF_1['FT']),color= 'blue', alpha=0.5, label='IMN')
-    ax.set_ylabel('Amplitud')
-    ax.set_xlabel('Frecuencia [1/s]')
-    ax.set_xlim(0, np.max(TF_1['XFT']))
-    ax.set_title('Espectro de Frecuencia', fontweight='bold', fontsize=15, loc='left')
+    ax.plot(TF_1['XFT'], np.abs(TF_1['FT']),color= 'blue', alpha=0.5, label=f'{column}')
+    ax.set_ylabel('amplitud')
+    ax.set_xlabel('[1/s]')
+    ax.set_xlim(left=0)
+    ax.set_ylim(bottom=0)
+#    ax.set_title('Espectro de Frecuencia', fontweight='bold', fontsize=15, loc='left')
+#    ax.ticklabel_format(style='sci', axis='x', scilimits=(0,0))
     ax.legend()
 
     # To have two 'y' axes
     twin_axes = ax.twinx()
  
-    twin_axes.plot(TF_2['XFT'], np.abs(TF_2['FT']),color= 'red', alpha=0.5, label='GPM')
+    twin_axes.plot(TF_2['XFT'], np.abs(TF_2['FT']),color= 'red', alpha=0.4, label='GPM')
+    twin_axes.set_xlim(left=0)
+    twin_axes.set_ylim(bottom=0)
     
     fig.tight_layout()
+    plt.savefig(f'./PLOTS/pcp_freq_{column}.png')
     plt.show()
 
-def scatter_plot(df, column):
+def plot_freq_2(df1, df2, column):
+    """
+    This function is useful to make frequency plots.
+    This plot shows the spectrum frequency of the input dataframes.
+    --------------------------------------------------------------------------------------
+    Input:
+    df1 <DataFrame>: it contains the value to analyze
+    df2 <DataFrame>: it contains the value to analyze
+    column <str>: the column to plot
+    d <float>: sample spacing
+    --------------------------------------------------------------------------------------
+    Output:
+    plot
+    """
+    
+    TF_1 = T_fourier(df1, column, 3600)
+    TF_2 = T_fourier(df2, column, 3600)
+
+    fig, ax = plt.subplots(figsize=(10, 8))
+
+    ax.plot(TF_1['XFT'], np.abs(TF_1['FT']),color= 'blue', alpha=0.5, label=f'{column}')
+    ax.plot(TF_2['XFT'], np.abs(TF_2['FT']),color= 'red', alpha=0.4)
+    ax.set_ylabel('amplitud')
+#    ax.set_xlabel('[1/s]')
+    ax.set_ylim(bottom=0)
+    ax.set_xlim(left=0, right=9e-5)
+#    ax.set_title('Espectro de Frecuencia', fontweight='bold', fontsize=15, loc='left')
+    ax.ticklabel_format(style='sci', axis='x', scilimits=(0,0))
+    ax.legend()
+
+#    plt.xticks([])
+    fig.tight_layout()
+    plt.savefig(f'./PLOTS/pcp_freq_{column}_v2.png')
+    plt.show()
+
+def scatter_plot_log(df, column):
     """
     This function creates a scatter plot to visualize the relationship between a specified column
-    and the 'Altitud (m.s.n.m.)' column in the input DataFrame.
+    and the 'Altitud (m.s.n.m.)' column in the input DataFrame. Points are colored based on the values
+    in the specified color_column.
 
     Parameters:
     -----------
     df : DataFrame
-        The input DataFrame containing the meta data (altitud and correlations).
+        The input DataFrame containing the meta data (altitud, correlations, and color values).
     column : str
         The column to be plotted on the x-axis.
+    color_column : str, optional
+        The column to be used for coloring the points. Default is 'region_climatica'.
 
     Notes:
     ------
@@ -446,14 +524,171 @@ def scatter_plot(df, column):
     """
 
     temp_resol = {
-    '1D': '1 día',
-    '7D': '1 semana',
-    '1M': '1 mes'
-}
+        '1D': '1 día',
+        '7D': '1 semana',
+        '1M': '1 mes'
+    }
     
+    # Define color map based on unique values in 'region_climatica'
+    colors = {'Pacifico Norte': 'b', 
+              'Pacifico Sur': 'r', 
+              'Valle Central': 'g', 
+              'Vertiente del Caribe': 'c',
+              'Zona Norte': 'm' 
+              }
+
     plt.figure(figsize=(10, 6))
-    plt.scatter(df[column], df['Altitud (m.s.n.m.)'])
+    
+    # Iterate through each region to create scatter plots with appropriate labels
+    for region, color in colors.items():
+        region_data = df[df['region_climatica'] == region]
+        plt.scatter(region_data[column], region_data['Altitud (m.s.n.m.)'], c=color, label=region)
+    
+    plt.yscale('log') 
     plt.xlabel('Correlaciones')
-    plt.ylabel('Altitud (m.s.n.m)')
-    plt.title(f'Localización de EMA vs acumulado temporal de {temp_resol[column]}')
+    plt.ylabel('[m.s.n.m] [escala log]')
+    plt.title(f'Altitud de EMA vs acumulado temporal de {temp_resol[column]}')
+    plt.legend()
+    plt.xlim(0.3, 1)
+    plt.show()
+
+def scatter_plot(df, column):
+    """
+    This function creates a scatter plot to visualize the relationship between a specified column
+    and the 'Altitud (m.s.n.m.)' column in the input DataFrame. Points are colored based on the values
+    in the specified color_column.
+
+    Parameters:
+    -----------
+    df : DataFrame
+        The input DataFrame containing the meta data (altitud, correlations, and color values).
+    column : str
+        The column to be plotted on the x-axis.
+    color_column : str
+        The column to be used for coloring the points.
+
+    Notes:
+    ------
+    The function assumes that 'Altitud (m.s.n.m.)' is a column in the DataFrame.
+    """
+
+    temp_resol = {
+        '1D': '1 día',
+        '7D': '1 semana',
+        '1M': '1 mes'
+    }
+    
+   # Define color map based on unique values in 'region_climatica'
+    colors = {'Pacifico Norte': 'b', 
+              'Pacifico Sur': 'r', 
+              'Valle Central': 'g', 
+              'Vertiente del Caribe':'c',
+              'Zona Norte':'m' 
+              }
+
+    plt.figure(figsize=(10, 6))
+    plt.scatter(df[column], df['Altitud (m.s.n.m.)'], c=df['region_climatica'].map(colors), label=df['region_climatica'])
+    plt.xlabel('Correlaciones')
+    plt.ylabel('[m.s.n.m]')
+    plt.title(f'Altitud de EMA vs acumulado temporal de {temp_resol[column]}')
+    plt.legend()
+    plt.xlim(0.3, 1)
+    plt.show()
+
+def scatter_plot_log_mt(df, column):
+    """
+    This function creates a scatter plot to visualize the relationship between a specified column
+    and the 'Altitud (m.s.n.m.)' column in the input DataFrame. Points are colored based on the values
+    in the specified color_column.
+
+    Parameters:
+    -----------
+    df : DataFrame
+        The input DataFrame containing the meta data (altitud, correlations, and color values).
+    column : str
+        The column to be plotted on the x-axis.
+    color_column : str, optional
+        The column to be used for coloring the points. Default is 'region_climatica'.
+
+    Notes:
+    ------
+    The function assumes that 'Altitud (m.s.n.m.)' is a column in the DataFrame.
+    """
+
+    temp_resol = {
+        '1H': '1 hora',
+        '3H': '3 horas',
+        '6H': '6 horas'
+    }
+    
+    # Define color map based on unique values in 'region_climatica'
+    colors = {
+        'Valle Central': 'g', 
+        'Caribe Norte':'c',
+        'Caribe Sur':'teal',
+        'Zona Norte':'m' 
+        }
+
+    plt.figure(figsize=(10, 6))
+    
+    # Iterate through each region to create scatter plots with appropriate labels
+    for region, color in colors.items():
+        region_data = df[df['region_climatica'] == region]
+        plt.scatter(region_data[column], region_data['Altitud (m.s.n.m.)'], c=color, label=region)
+    
+    plt.yscale('log') 
+    plt.xlabel('Correlaciones')
+    plt.ylabel('[m.s.n.m] [escala log]')
+    plt.title(f'Altitud de EMA vs acumulado temporal de {temp_resol[column]}')
+    plt.legend()
+    plt.xlim(0.5, 1)
+
+    plt.savefig(f'./PLOTS/altitud_vs_acum_temp{temp_resol[column]}')
+    plt.show()
+
+def scatter_plot_log_st(df, column):
+    """
+    This function creates a scatter plot to visualize the relationship between a specified column
+    and the 'Altitud (m.s.n.m.)' column in the input DataFrame. Points are colored based on the values
+    in the specified color_column.
+
+    Parameters:
+    -----------
+    df : DataFrame
+        The input DataFrame containing the meta data (altitud, correlations, and color values).
+    column : str
+        The column to be plotted on the x-axis.
+    color_column : str, optional
+        The column to be used for coloring the points. Default is 'region_climatica'.
+
+    Notes:
+    ------
+    The function assumes that 'Altitud (m.s.n.m.)' is a column in the DataFrame.
+    """
+
+    temp_resol = {
+        '1H': '1 hora',
+        '3H': '3 horas',
+        '6H': '6 horas'
+    }
+    
+    # Define color map based on unique values in 'region_climatica'
+    colors = {'Pacifico Norte': 'b', 
+              'Pacifico Sur': 'r' 
+              }
+
+    plt.figure(figsize=(10, 6))
+    
+    # Iterate through each region to create scatter plots with appropriate labels
+    for region, color in colors.items():
+        region_data = df[df['region_climatica'] == region]
+        plt.scatter(region_data[column], region_data['Altitud (m.s.n.m.)'], c=color, label=region)
+    
+    plt.yscale('log') 
+    plt.xlabel('Correlaciones')
+    plt.ylabel('[m.s.n.m] [escala log]')
+    plt.title(f'Altitud de EMA vs acumulado temporal de {temp_resol[column]}')
+    plt.legend()
+    plt.xlim(0.4, 1)
+    plt.savefig(f'./PLOTS/altitud_vs_acum_temp{temp_resol[column]}_ST.png')
     plt.show()
