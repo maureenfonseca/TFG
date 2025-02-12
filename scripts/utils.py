@@ -365,27 +365,30 @@ def plot_resol(df1, df2, resolution, column):
     # Bar chart is created for the selected column in each data set
     rects1 = ax.bar(x - width/2, np.array(df1_resampled[column]), width, label='AWS', color='blue', alpha=0.5)
     rects2 = ax.bar(x + width/2, np.array(df2_resampled[column]), width, label='GPM', color='red', alpha=0.5)
+    #ax.ticklabel_format(style='sci', axis='y', scilimits=(0,0))
+    ax.legend(loc='upper right')
 
     # To have two 'y' axes
     twin_axes = ax.twinx()
 
     # To calculate cumulative over time 
-    twin_axes.plot(x - width/2, np.cumsum(np.array(df1_resampled[column])), color='blue', linestyle='--', alpha=0.5)
+    twin_axes.plot(x - width/2, np.cumsum(np.array(df1_resampled[column])), label=f'{column}', color='blue', linestyle='--', alpha=0.5)
     twin_axes.plot(x - width/2, np.cumsum(np.array(df2_resampled[column])), color='red', linestyle='--', alpha=0.5)
-    twin_axes.set_ylabel('[mm]')
+    #twin_axes.set_ylabel('[mm]')
+    #twin_axes.ticklabel_format(style='sci', axis='y', scilimits=(0,0))
     twin_axes.legend()
 
     # Value identification labels are added to the chart
-    ax.set_ylabel('[mm]')
-    ax.set_title(str(f'Precipitation for {column} in {resolution} resolution'), fontweight='bold', fontsize=15, loc='left')
+    #ax.set_ylabel('[mm]')
+    #ax.set_title(str(f'Precipitation for {column} in {resolution} resolution'), fontweight='bold', fontsize=15, loc='left')
     ax.set_xticks(x)
     ax.set_xticklabels(df1_resampled.index, rotation=45, ha='right')
-
-    ax.legend()
+    #ax.legend()
     fig.tight_layout()
     fig.autofmt_xdate()
     
-    plt.savefig(f'./PLOTS/pcp_{column}_{resolution}.png')
+    #plt.xticks([])
+    plt.savefig(f'./PLOTS/pcp_{column}_{resolution}_LT.png')
 
     # Display the plot in the notebook
     plt.show()
@@ -488,8 +491,8 @@ def plot_freq_2(df1, df2, column):
 
     fig, ax = plt.subplots(figsize=(10, 8))
 
-    ax.plot(TF_1['XFT'], np.abs(TF_1['FT']),color= 'blue', alpha=0.5, label=f'{column}')
-    ax.plot(TF_2['XFT'], np.abs(TF_2['FT']),color= 'red', alpha=0.4)
+    ax.plot(TF_1['XFT'], np.abs(TF_1['FT']), label='EMA', color= 'blue', alpha=0.5)
+    ax.plot(TF_2['XFT'], np.abs(TF_2['FT']), label='GPM', color= 'red', alpha=0.4)
     ax.set_ylabel('amplitud')
 #    ax.set_xlabel('[1/s]')
     ax.set_ylim(bottom=0)
